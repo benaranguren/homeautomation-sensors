@@ -1,13 +1,20 @@
-#include <Adafruit_BMP085_U.h>
-#include <Adafruit_Sensor.h>
 #include <ArduinoOTA.h>
 #include <ArduinoJson.h>
-#include <DHT.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <PubSubClient.h>
 #include <WiFiUdp.h>
 
+#ifdef HAS_BMP
+#include <Adafruit_BMP085_U.h>
+#include <Adafruit_Sensor.h>
+#endif
+
+#ifdef HAS_DHT
+#include <DHT.h>
+#endif
+
+/* User specific configuration such as WiFi credentials */
 #include <user_cfg.h>
 
 #ifdef HAS_RF433_TX
@@ -78,11 +85,6 @@ char buffer[20] = {0};
 /* This needs to be set to 1 to send data to MQTT broker */
 int has_changes = 0;
 
-/* WiFi */
-const char* SSID = MY_SSID;
-IPAddress broker(192, 168, 1, 134);
-const char* password = MY_WIFI_PASSWORD;
-
 /* MQTT */
 WiFiClient wifi_client;
 PubSubClient mqtt_client(wifi_client);
@@ -106,13 +108,13 @@ void callback(const char* topic, byte* payload, unsigned int length) {
 
 void connect_mqtt() {
   while (!mqtt_client.connected()) {
-    Serial.print("Connecting to MQTT broker ... "); 
+    Serial.print("Connecting to MQTT broker ... ");
     if (mqtt_client.connect(STR(CLIENT_ID))) {
       Serial.println("OK");
       mqtt_client.subscribe(MQTT_TOPIC);
     } else {
       Serial.println("Failed .. retrying in 5 sec");
-      delay(5000); 
+      delay(5000);
     }
   }
 }
@@ -124,8 +126,8 @@ void connect_wifi() {
   return;
 #endif
 
-  Serial.printf("Connecting to %s ...", SSID);
-  WiFi.begin(SSID, password);
+  Serial.printf("Connecting to %s ...", MY_SSID);
+  WiFi.begin(MY_SSID, MY_WIFI_PASSWD);
   delay(100);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
     Serial.println("Failed ... Rebooting in 5 sec");
@@ -169,7 +171,7 @@ void setup() {
 
   ArduinoOTA.begin();
 
-  mqtt_client.setServer(broker, 1883);
+  mqtt_client.setServer(mqtt_broker, 1883);
   mqtt_client.setCallback(callback);
 
 #ifdef HAS_PIR
@@ -212,7 +214,7 @@ void loop_mqtt() {
 }
 
 /* PIR device loop
- * 
+ *
  * Read PIR status.  When the device first boots up, this routine will perform
  * calibration first before reading the sensor.
  */
@@ -273,7 +275,7 @@ void loop_dht() {
   } else if (abs(prev_humidity - pub_humidity) > 1.5) {
     has_changes = 1;
   }
-  
+
   prev_temperature = pub_temperature;
   prev_humidity = pub_humidity;
 #endif
@@ -340,7 +342,7 @@ void publish_data() {
 void loop_433mhz() {
 #ifdef HAS_RF433_TX
   #define PULSE_WIDTH 183
-  #define DATA_LEN 24 
+  #define DATA_LEN 24
   int retries = 10;
   for (int i = 0; i < retries; i++) {
     rf_write_code(PIN_RFTX, PULSE_WIDTH, rf_code, DATA_LEN);
@@ -360,7 +362,7 @@ void loop() {
 
   has_changes = 0;
   loop_mqtt();
-  loop_pir();	
+  loop_pir();
   loop_bmp();
   loop_dht();
   loop_lightswitch();
